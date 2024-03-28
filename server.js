@@ -6,19 +6,13 @@ const { AssemblyAI } = require("assemblyai");
 const aai = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY });
 const app = express();
 app.use(express.static("public"));
-// app.use(
-//   "/assemblyai.js",
-//   express.static(
-//     path.join(__dirname, "node_modules/assemblyai/dist/assemblyai.umd.js"),
-//   ),
-// );
+
 app.use(express.json());
 
 app.get("/token", async (_req, res) => {
   const token = await aai.realtime.createTemporaryToken({ expires_in: 3600 });
   res.json({ token });
 });
-
 
 app.post("/get_summary", async (_req, res) => {
   const text2Summarize = _req.body.input_text;

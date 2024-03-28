@@ -1,0 +1,79 @@
+/* Left column */
+.base_panel {
+  display: flex;
+}
+
+.column-left {
+  width: 66vw;
+  height: 100vh;
+  background: deepskyblue;
+}
+
+.button-group {
+  height: 15%;
+  background: gray;
+
+  padding-left: 10px;
+
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+}
+
+.my-canvas {
+  height: 85%;
+  background: lightgray;
+}
+
+.my-button {
+  width: 90px;
+  height: 60px;
+
+  margin-right: 10px;
+  padding: 2px;
+  border-radius: 5px;
+
+  font-size: 20px;
+
+  display: flex;
+  align-content: center;
+  justify-content: center;
+
+  user-select: none;
+  cursor: pointer;
+}
+
+.my_button-blue {
+  color: white;
+  background: #1035c6;
+}
+
+.my_button-purple {
+  color: white;
+  background: #6b2bd6;
+}
+
+
+/* Right column */
+.column-right {
+  width: 34vw;
+  height: 100vh;
+  background: white;
+  padding: 10px;
+}
+
+.message-box {
+  width: 100%;
+  height: auto;
+  background: white;
+  /*padding: 1em;*/
+  padding: 1px;
+
+  font-size: 20px;
+  font-weight: 400;
+
+  box-shadow: 0 0 32px 0 rgb(0 0 0 / 16%);
+  transition: 0.5s ease-in;
+  user-select: none;
+}
+

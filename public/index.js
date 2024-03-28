@@ -1,23 +1,27 @@
 // required dom elements
 
-const buttonEl = document.getElementById("button");
-const buttonTopic = document.getElementById("addTopic");
-const buttonQuestion=document.getElementById("addQuestion")
-const messageEl = document.getElementById("message");
-const titleEl = document.getElementById("real-time-title");
+const startInterviewButton = document.getElementById("startInterviewButton");
+const addTopicButton = document.getElementById("addTopicButton");
+const addQuestionButton = document.getElementById("addQuestionButton")
+
+const messageBox = document.getElementById("message-box");
+
 
 // set initial state of application variables
 // messageEl.style.display = "none";
 let isRecording = false;
 let rt;
-let rtSummary;
 let microphone;
-let wholetext = "";
-const svg = d3.select("#container")
+
+// This is the most important status to maintain.
+const mySegments = []; // seg {id, shapes: {circleElement, textElement}, fullMessage}
+let segCount = 0;
+
+const d3Group = d3.select("#my-canvas")
     .append("svg")
     .attr("width", 1500)
-    .attr("height", 1500);
-const group = svg.append("g");
+    .attr("height", 1500)
+    .append("g");
 
 
 function createMicrophone() {
@@ -80,32 +84,41 @@ function mergeBuffers(lhs, rhs) {
   return mergedBuffer
 }
 
-const callSummary = async (textToSummary) => {
-  const summaryRes = await fetch('/get_summary', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      input_text: textToSummary
-    })
-  });
+const delta = 10;
+const initializeBubbleForSegment = () => {
 
-  if (summaryRes.status === 200)
-  {
-    const jsonResult = await summaryRes.json();
-    console.log(jsonResult.response);
-    var finalSummary =jsonResult.response.response;
-    finalSummary = finalSummary.replace(/<\/?text>/g, '');
-    messageEl.innerText=finalSummary;
-  }
+  const circleElement = d3Group.append("circle")
+      .attr("cx", 100+delta) // 圆心的x坐标
+      .attr("cy", 100) // 圆心的y坐标
+      .attr("r", 50) // 圆的半径
+      .style("fill", "yellow") // 填充颜色
+      .style("cursor", "move"); // 允许拖动;
+  const textElement = d3Group.append("text")
+      .attr("x", 100+delta) // 文本的x坐标
+      .attr("y", 100) // 文本的y坐标
+      .attr("text-anchor", "middle") // 文本在圆心水平居中
+      .attr("alignment-baseline", "middle") // 文本在圆心垂直居中
+      .text("") // 文本内容
+      .style("pointer-events", "none"); // 防止文本干扰拖动
+
+  circleElement.call(d3.drag()
+      .on("drag", (event) => {
+        const newX = event.x;
+        const newY = event.y;
+        circleElement.attr("cx", newX);
+        circleElement.attr("cy", newY);
+        textElement.attr("x", newX);
+        textElement.attr("y", newY);
+      }));
+
+  return {circleElement, textElement}
 }
-
-
 
 // runs real-time transcription and handles global variables
 const run = async () => {
   if (isRecording) {
+    // Stop recording:
+
     if (rt) {
       await rt.close(false);
       rt = null;
@@ -115,10 +128,17 @@ const run = async () => {
       microphone.stopRecording();
       microphone = null;
     }
-    callSummary(wholetext);
+
+    console.log("To summary", mySegments[segCount-1].fullMessage);
+    const sumResult = await callSummary(mySegments[segCount-1].fullMessage);
+    messageBox.innerText = sumResult;
+    // messageBox.innerText = "summary";
   }
   else
   {
+    // Start recording:
+    console.log("Waiting for connection with AssemblyAI ...");
+
     microphone = createMicrophone();
     await microphone.requestPermission();
 
@@ -130,35 +150,26 @@ const run = async () => {
       return;
     }
     rt = new assemblyai.RealtimeService({ token: data.token });
-    rtSummary = new assemblyai.LemurService ({ token: data.token });
 
     // handle incoming messages to display transcription to the DOM
     const texts = {};
-    let speak=true;
-    let circle;
-    let delta=0;
-    let text;
+
+    let isTheFirstTimeToSpeak = true;
 
     rt.on("transcript", (message) => {
-
-      if(speak){
-        circle= group.append("circle")
-            .attr("cx", 100+delta) // 圆心的x坐标
-            .attr("cy", 100) // 圆心的y坐标
-            .attr("r", 50) // 圆的半径
-            .style("fill", "yellow") // 填充颜色
-            .style("cursor", "move"); // 允许拖动;
-        text = group.append("text")
-            .attr("x", 100+delta) // 文本的x坐标
-            .attr("y", 100) // 文本的y坐标
-            .attr("text-anchor", "middle") // 文本在圆心水平居中
-            .attr("alignment-baseline", "middle") // 文本在圆心垂直居中
-            .text("") // 文本内容
-            .style("pointer-events", "none"); // 防止文本干扰拖动
+      if (isTheFirstTimeToSpeak) {
+        const shapes = initializeBubbleForSegment();
+        const newSeg = {
+          id: `seg_${segCount}`,
+          shapes: shapes
+        };
+        mySegments.push(newSeg);
+        segCount++;
+        isTheFirstTimeToSpeak = false;
       }
-      speak=false;
 
       let msg = "";
+      const currentSeg = mySegments[segCount-1];
       texts[message.audio_start] = message.text;
       const keys = Object.keys(texts);
       keys.sort((a, b) => a - b);
@@ -166,24 +177,13 @@ const run = async () => {
         if (texts[key]) {
           msg += ` ${texts[key]}`;
         }
-        let instantText;
-        instantText=` ${texts[key]}`
-        text.text(instantText);
+
+        const instantText = ` ${texts[key]}`;
+        currentSeg.shapes.textElement.text(instantText);
       }
-      wholetext=msg;
-      messageEl.innerText=wholetext;
 
-
-      const dragHandler = d3.drag()
-          .on("drag", function(event) {
-            const newX = event.x;
-            const newY = event.y;
-            circle.attr("cx", newX);
-            circle.attr("cy", newY);
-            text.attr("x", newX);
-            text.attr("y", newY);
-          });
-      circle.call(dragHandler);
+      currentSeg.fullMessage = msg;
+      messageBox.innerText = msg;
     });
 
     rt.on("error", async (error) => {
@@ -195,14 +195,9 @@ const run = async () => {
       console.log(event);
       rt = null;
     });
-    // const { summary } = await client.lemur.task({
-    //   transcript_ids: msg,
-    //   prompt
-    // })
-    // console.log(summary)
+
     await rt.connect();
-    // once socket is open, begin recording
-    messageEl.style.display = "";
+    console.log("Connected. Start recording ...");
 
     await microphone.startRecording((audioData) => {
       rt.sendAudio(audioData);
@@ -211,14 +206,8 @@ const run = async () => {
 
   isRecording = !isRecording;
 
-  buttonEl.innerText = isRecording ? "Stop" : "Record";
-  titleEl.innerText = isRecording
-    ? "Click stop to end recording!"
-    : "Click start to begin recording!";
-
+  startInterviewButton.innerText = isRecording ? "Stop" : "Start interview";
 };
 
-
-buttonEl.addEventListener("click", () => run());
-buttonQuestion.addEventListener("click",)
+startInterviewButton.addEventListener("click", () => run());
 
