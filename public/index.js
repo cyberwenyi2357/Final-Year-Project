@@ -1,13 +1,24 @@
 // required dom elements
+
 const buttonEl = document.getElementById("button");
+const buttonTopic = document.getElementById("addTopic");
+const buttonQuestion=document.getElementById("addQuestion")
 const messageEl = document.getElementById("message");
 const titleEl = document.getElementById("real-time-title");
 
 // set initial state of application variables
-messageEl.style.display = "none";
+// messageEl.style.display = "none";
 let isRecording = false;
 let rt;
+let rtSummary;
 let microphone;
+let wholetext = "";
+const svg = d3.select("#container")
+    .append("svg")
+    .attr("width", 1500)
+    .attr("height", 1500);
+const group = svg.append("g");
+
 
 function createMicrophone() {
   let stream;
@@ -69,6 +80,29 @@ function mergeBuffers(lhs, rhs) {
   return mergedBuffer
 }
 
+const callSummary = async (textToSummary) => {
+  const summaryRes = await fetch('/get_summary', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      input_text: textToSummary
+    })
+  });
+
+  if (summaryRes.status === 200)
+  {
+    const jsonResult = await summaryRes.json();
+    console.log(jsonResult.response);
+    var finalSummary =jsonResult.response.response;
+    finalSummary = finalSummary.replace(/<\/?text>/g, '');
+    messageEl.innerText=finalSummary;
+  }
+}
+
+
+
 // runs real-time transcription and handles global variables
 const run = async () => {
   if (isRecording) {
@@ -81,7 +115,10 @@ const run = async () => {
       microphone.stopRecording();
       microphone = null;
     }
-  } else {
+    callSummary(wholetext);
+  }
+  else
+  {
     microphone = createMicrophone();
     await microphone.requestPermission();
 
@@ -92,11 +129,35 @@ const run = async () => {
       alert(data.error);
       return;
     }
-
     rt = new assemblyai.RealtimeService({ token: data.token });
+    rtSummary = new assemblyai.LemurService ({ token: data.token });
+
     // handle incoming messages to display transcription to the DOM
     const texts = {};
+    let speak=true;
+    let circle;
+    let delta=0;
+    let text;
+
     rt.on("transcript", (message) => {
+
+      if(speak){
+        circle= group.append("circle")
+            .attr("cx", 100+delta) // 圆心的x坐标
+            .attr("cy", 100) // 圆心的y坐标
+            .attr("r", 50) // 圆的半径
+            .style("fill", "yellow") // 填充颜色
+            .style("cursor", "move"); // 允许拖动;
+        text = group.append("text")
+            .attr("x", 100+delta) // 文本的x坐标
+            .attr("y", 100) // 文本的y坐标
+            .attr("text-anchor", "middle") // 文本在圆心水平居中
+            .attr("alignment-baseline", "middle") // 文本在圆心垂直居中
+            .text("") // 文本内容
+            .style("pointer-events", "none"); // 防止文本干扰拖动
+      }
+      speak=false;
+
       let msg = "";
       texts[message.audio_start] = message.text;
       const keys = Object.keys(texts);
@@ -105,8 +166,24 @@ const run = async () => {
         if (texts[key]) {
           msg += ` ${texts[key]}`;
         }
+        let instantText;
+        instantText=` ${texts[key]}`
+        text.text(instantText);
       }
-      messageEl.innerText = msg;
+      wholetext=msg;
+      messageEl.innerText=wholetext;
+
+
+      const dragHandler = d3.drag()
+          .on("drag", function(event) {
+            const newX = event.x;
+            const newY = event.y;
+            circle.attr("cx", newX);
+            circle.attr("cy", newY);
+            text.attr("x", newX);
+            text.attr("y", newY);
+          });
+      circle.call(dragHandler);
     });
 
     rt.on("error", async (error) => {
@@ -118,7 +195,11 @@ const run = async () => {
       console.log(event);
       rt = null;
     });
-
+    // const { summary } = await client.lemur.task({
+    //   transcript_ids: msg,
+    //   prompt
+    // })
+    // console.log(summary)
     await rt.connect();
     // once socket is open, begin recording
     messageEl.style.display = "";
@@ -129,11 +210,15 @@ const run = async () => {
   }
 
   isRecording = !isRecording;
+
   buttonEl.innerText = isRecording ? "Stop" : "Record";
   titleEl.innerText = isRecording
     ? "Click stop to end recording!"
     : "Click start to begin recording!";
+
 };
 
+
 buttonEl.addEventListener("click", () => run());
+buttonQuestion.addEventListener("click",)
 

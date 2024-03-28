@@ -10,19 +10,28 @@
   </head>
   <body>
     <header>
-      <h1 class="header__title">Real-Time Transcription</h1>
-      <p class="header__sub-title">
-        Try AssemblyAI's new real-time transcription endpoint!
-      </p>
     </header>
-    <div class="real-time-interface">
-      <p id="real-time-title" class="real-time-interface__title">
-        Click start to begin recording!
-      </p>
-      <p id="button" class="real-time-interface__button">Start</p>
-      <p id="message" class="real-time-interface__message"></p>
+
+    <div class="real-time-interface" id="container">
+      <div id="button-group-first">
+        <button id="addTopic" class="button_for_preparing">Add topic</button>
+        <button id="addQuestion" class="button_for_preparing">Add question</button>
+      </div>
+      <div id="button-group-section">
+        <button id="button" class="real-time-interface__button">Start interview</button>
+      </div>
+      <p id="message" class="real-time-interface__message">sdsdfsdfsfsdfsdd</p>
+<!--      <form>-->
+<!--        <input type="text" name="fistname">-->
+<!--        <br/>-->
+<!--        <input type="text" name="lastname">-->
+<!--      </form>-->
     </div>
-    <script src="assemblyai.js"></script>
+<!--    <div id="zrender_cvs" style="width: 500px; height: 500px; background: none;"></div>-->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/d3-drag.v2.min.js"></script>
+    <script src="lib/zrender.js"></script>
+    <script src="lib/assemblyai.js"></script>
     <script src="index.js"></script>
   </body>
 </html>

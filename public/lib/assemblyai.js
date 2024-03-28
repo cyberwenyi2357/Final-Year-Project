@@ -66,7 +66,7 @@
                 init.headers = (_a = init.headers) !== null && _a !== void 0 ? _a : {};
                 init.headers = Object.assign({ Authorization: this.params.apiKey, "Content-Type": "application/json" }, init.headers);
                 if (!input.startsWith("http"))
-                    input = this.params.baseUrl + input;
+                    input = this.params.baseUrl + input
                 const response = yield fetch(input, init);
                 if (response.status >= 400) {
                     let json;
@@ -199,7 +199,7 @@
     const terminateSessionMessage = `{"terminate_session":true}`;
     class RealtimeTranscriber {
         constructor(params) {
-            var _a, _b;
+                var _a, _b;
             this.listeners = {};
             this.realtimeUrl = (_a = params.realtimeUrl) !== null && _a !== void 0 ? _a : defaultRealtimeUrl;
             this.sampleRate = (_b = params.sampleRate) !== null && _b !== void 0 ? _b : 16000;
