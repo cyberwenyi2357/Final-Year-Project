@@ -19,8 +19,8 @@ let segCount = 0;
 
 const d3Group = d3.select("#my-canvas")
     .append("svg")
-    .attr("width", 1500)
-    .attr("height", 1500)
+    .attr("width", "100%")
+    .attr("height", "100%")
     .append("g");
 
 
