@@ -1,5 +1,4 @@
 // required dom elements
-
 const startInterviewButton = document.getElementById("startInterviewButton");
 const addTopicButton = document.getElementById("addTopicButton");
 const addQuestionButton = document.getElementById("addQuestionButton")
@@ -10,13 +9,12 @@ const messageBox = document.getElementById("message-box");
 let isRecording = false;
 let rt;
 let microphone;
-
 // This is the most important status to maintain.
 const mySegments = []; // seg {id, shapes: {circleElement, textElement}, fullMessage}
 let segCount = 0;
 var width = window.innerWidth;
 var height = window.innerHeight;
-
+let isTheFirstTimeToSpeak = true;
 var stage = new Konva.Stage({
   container: 'my-canvas',
   width: width,
@@ -25,13 +23,10 @@ var stage = new Konva.Stage({
 
 var layer = new Konva.Layer();
 stage.add(layer);
-const d3Group = d3.select("#my-canvas")
-    .append("svg")
-    .attr("width", "100%")
-    .attr("height", "100%")
-    .append("g");
+let spaceBetweenQuestions=45;
+// Create a new directed graph
 
-let questionNo=0;
+var g=new graphlib.Graph();
 function createMicrophone() {
   let stream;
   let audioContext;
@@ -64,7 +59,6 @@ function createMicrophone() {
 
         const bufferDuration =
           (audioBufferQueue.length / audioContext.sampleRate) * 1000;
-
         // wait until we have 100ms of audio data
         if (bufferDuration >= 100) {
           const totalSamples = Math.floor(audioContext.sampleRate * 0.1);
@@ -93,60 +87,122 @@ function mergeBuffers(lhs, rhs) {
 }
 
 const delta = 10;
-const initializeBubbleForSegment = () => {
+const initializeBubbleForSegment = (x,y) => {
+  var originalAttrs = {
+    x: x,
+    y: y,
+    scaleX: 1,
+    scaleY: 1,
+    draggable: true,
+    rotation: 0,
+  };
+  var group = new Konva.Group(originalAttrs);
+  layer.add(group);
+  let size=100;
+  let circle=new Konva.Circle({
+    x: 0,
+    y: 0,
+    radius: size/2,
+    fill: 'red',
+  });
+  group.add(circle);
+  var defaultText = ' ';
+  var text = new Konva.Text({
+    text: defaultText,
+    x: size/1.8,
+    y: size/1.2,
+    width: size,
+    // y:size/1.2,
+    // align: 'right',
+  });
+  group.add(text);
+  var hammertime = new Hammer(group, { domEvents: true });
 
-  const circleElement = d3Group.append("circle")
-      .attr("cx", 100+delta) // 圆心的x坐标
-      .attr("cy", 100) // 圆心的y坐标
-      .attr("r", 50) // 圆的半径
-      .style("fill", "yellow") // 填充颜色
-      .style("cursor", "move"); // 允许拖动;
-  const textElement = d3Group.append("text")
-      .attr("x", 100+delta) // 文本的x坐标
-      .attr("y", 100) // 文本的y坐标
-      .attr("text-anchor", "middle") // 文本在圆心水平居中
-      .attr("alignment-baseline", "middle") // 文本在圆心垂直居中
-      .text("") // 文本内容
-      .style("pointer-events", "none"); // 防止文本干扰拖动
+  // add rotate gesture
+  hammertime.get('rotate').set({ enable: true });
 
-  circleElement.call(d3.drag()
-      .on("drag", (event) => {
-        const newX = event.x;
-        const newY = event.y;
-        circleElement.attr("cx", newX);
-        circleElement.attr("cy", newY);
-        textElement.attr("x", newX);
-        textElement.attr("y", newY);
-      }));
+  // now attach all possible events
+  group.on('swipe', function (ev) {
+    text.text('swiping');
+    group.to({
+      x: group.x() + ev.evt.gesture.deltaX,
+      y: group.y() + ev.evt.gesture.deltaY,
 
-  return {circleElement, textElement}
+      onFinish: function () {
+        group.to(Object.assign({}, originalAttrs));
+        text.text(defaultText);
+      },
+    });
+  });
+
+  group.on('press', function (ev) {
+    text.text('Under press');
+    circle.to({
+      fill: 'green',
+    });
+  });
+
+  group.on('touchend', function (ev) {
+    circle.to({
+      fill: 'yellow',
+    });
+
+    setTimeout(() => {
+      text.text(defaultText);
+    }, 300);
+  });
+
+  group.on('dragend', () => {
+    group.to(Object.assign({}, originalAttrs));
+  });
+
+  var oldRotation = 0;
+  var startScale = 0;
+  group.on('rotatestart', function (ev) {
+    oldRotation = ev.evt.gesture.rotation;
+    startScale = circle.scaleX();
+    group.stopDrag();
+    group.draggable(false);
+    text.text('rotating...');
+  });
+
+  group.on('rotate', function (ev) {
+    var delta = oldRotation - ev.evt.gesture.rotation;
+    group.rotate(-delta);
+    oldRotation = ev.evt.gesture.rotation;
+    group.scaleX(startScale * ev.evt.gesture.scale);
+    group.scaleY(startScale * ev.evt.gesture.scale);
+  });
+
+  group.on('rotateend rotatecancel', function (ev) {
+    group.to(Object.assign({}, originalAttrs));
+    text.text(defaultText);
+    group.draggable(true);
+  });
+  return{group}
 }
+
 
 // runs real-time transcription and handles global variables
 const run = async () => {
   if (isRecording) {
     // Stop recording:
-
     if (rt) {
       await rt.close(false);
       rt = null;
     }
-
     if (microphone) {
       microphone.stopRecording();
       microphone = null;
     }
-
-    console.log("To summary", mySegments[segCount-1].fullMessage);
-    const sumResult = await callSummary(mySegments[segCount-1].fullMessage);
-    messageBox.innerText = sumResult;
-    // messageBox.innerText = "summary";
+    // console.log("To summary", mySegments[segCount-1].fullMessage);
+    // const sumResult = await callSummary(mySegments[segCount-1].fullMessage);
+    // messageBox.innerText = sumResult;
   }
   else
   {
     // Start recording:
     console.log("Waiting for connection with AssemblyAI ...");
-
     microphone = createMicrophone();
     await microphone.requestPermission();
 
@@ -161,23 +217,8 @@ const run = async () => {
 
     // handle incoming messages to display transcription to the DOM
     const texts = {};
-
-    let isTheFirstTimeToSpeak = true;
-
     rt.on("transcript", (message) => {
-      if (isTheFirstTimeToSpeak) {
-        const shapes = initializeBubbleForSegment();
-        const newSeg = {
-          id: `seg_${segCount}`,
-          shapes: shapes
-        };
-        mySegments.push(newSeg);
-        segCount++;
-        isTheFirstTimeToSpeak = false;
-      }
-
       let msg = "";
-      const currentSeg = mySegments[segCount-1];
       texts[message.audio_start] = message.text;
       const keys = Object.keys(texts);
       keys.sort((a, b) => a - b);
@@ -185,13 +226,17 @@ const run = async () => {
         if (texts[key]) {
           msg += ` ${texts[key]}`;
         }
-
-        const instantText = ` ${texts[key]}`;
-        currentSeg.shapes.textElement.text(instantText);
+        let instantText;
+        instantText=` ${texts[key]}`;
       }
+messageBox.innerText=msg;
+        // const newSeg = {
+        //   id: `seg_${segCount}`,
+        //   shapes: shapes
+        // };
+        // mySegments.push(newSeg);
+        // segCount++;
 
-      currentSeg.fullMessage = msg;
-      messageBox.innerText = msg;
     });
 
     rt.on("error", async (error) => {
@@ -217,12 +262,27 @@ const run = async () => {
   startInterviewButton.innerText = isRecording ? "Stop" : "Start interview";
 };
 
-startInterviewButton.addEventListener("click", () => run());
+startInterviewButton.addEventListener("click", () => {
+  // 1
+  // updatePositionAll();
+for (let label of labelCollection){
+  checkBoxCollection.push(addCheckBox(label));
+  refreshAllQUestions(label);
+}
+  // 2
+  run();
+});
 addQuestionButton.addEventListener("click",addQuestion);
+let labelCollection=[];
+let checkBoxCollection=[];
+// initializeBubbleForSegment();
+
 function addQuestion(){
+  let newAttribute;
+  let QA= new Konva.Group(newAttribute);
   var label = new Konva.Label({
     x: 50,
-    y: 80+questionNo,
+    y: 40+labelCollection.length * spaceBetweenQuestions,
     opacity: 1,
     draggable: true,
   });
@@ -243,7 +303,7 @@ function addQuestion(){
       textNode
   );
   layer.add(label);
-
+  // const tex = label.getText()
   textNode.on('transform', function () {
     // reset scale, so only with is changing by transformer
     textNode.setAttrs({
@@ -255,8 +315,6 @@ function addQuestion(){
   textNode.on('dblclick dbltap', () => {
     // hide text node and transformer:
     textNode.hide();
-
-
     // create textarea over canvas with absolute position
     // first we need to find position for textarea
     // how to find it?
@@ -281,12 +339,14 @@ function addQuestion(){
     textarea.style.position = 'absolute';
     textarea.style.top = areaPosition.y + 'px';
     textarea.style.left = areaPosition.x + 'px';
+
     textarea.style.width = textNode.width() - textNode.padding() * 2 + 'px';
     textarea.style.height =
         textNode.height() - textNode.padding() * 2 + 5 + 'px';
     textarea.style.fontSize = textNode.fontSize() + 'px';
     textarea.style.border = 'none';
     textarea.style.padding = '10px';
+    textarea.style.margin = '0px';
     textarea.style.margin = '0px';
     textarea.style.overflow = 'hidden';
     textarea.style.background = 'white';
@@ -297,11 +357,7 @@ function addQuestion(){
     textarea.style.transformOrigin = 'left top';
     textarea.style.textAlign = textNode.align();
     textarea.style.color = textNode.fill();
-    // rotation = textNode.rotation();
     var transform = '';
-    // if (rotation) {
-    //   transform += 'rotateZ(' + rotation + 'deg)';
-    // }
 
     var px = 0;
     // also we need to slightly move textarea on firefox
@@ -322,11 +378,12 @@ function addQuestion(){
 
     textarea.focus();
 
+// 创建 <input> 元素
+
     function removeTextarea() {
       textarea.parentNode.removeChild(textarea);
       window.removeEventListener('click', handleOutsideClick);
       textNode.show();
-
 
     }
 
@@ -367,7 +424,7 @@ function addQuestion(){
     });
 
     textarea.addEventListener('keydown', function (e) {
-      scale = textNode.getAbsoluteScale().x;
+      let scale = textNode.getAbsoluteScale().x;
       setTextareaWidth(textNode.width() * scale);
       textarea.style.height = 'auto';
       textarea.style.height =
@@ -378,14 +435,50 @@ function addQuestion(){
       if (e.target !== textarea) {
         textNode.text(textarea.value);
         removeTextarea();
-        addBackground();
-
       }
     }
     setTimeout(() => {
       window.addEventListener('click', handleOutsideClick);
     });
   });
-  questionNo+=1;
+  labelCollection.push(label);
 }
 
+function addCheckBox(label){
+  let checkboxElement = document.createElement("input");
+// 设置元素类型为复选框
+  checkboxElement.type = "checkbox";
+// 设置元素的 CSS 样式
+  checkboxElement.style.position = "absolute";
+  checkboxElement.style.top = label.y()+label.getText().height()*1.4+'px';
+  checkboxElement.style.left = label.x()+label.getText().width()*0.8+'px';
+  // console.log(checkboxElement.style.top);
+  checkboxElement.style.width = "18px";
+  checkboxElement.style.height = "18px";
+  checkboxElement.style.zIndex = "9999";
+// 将元素添加到文档中的适当位置
+  document.body.appendChild(checkboxElement);
+  function updateCheckboxPosition() {
+    checkboxElement.style.top =  label.y()+label.getText().height()*3+ "px";
+    checkboxElement.style.left = label.x()+label.getText().width()*0.9+'px';
+    // 调用下一次更新
+    requestAnimationFrame(updateCheckboxPosition);
+  }
+// 调用更新函数开始实时更新位置
+  updateCheckboxPosition();
+  checkboxElement.addEventListener("click", function(event) {
+    // 在复选框被点击时执行的逻辑
+    if (checkboxElement.checked) {
+label.opacity(1);
+      // if(isRecording)
+      initializeBubbleForSegment(label.x(), label.y()+30);
+      // run();
+    } else {
+      console.log("复选框未被选中");
+    }
+  });
+  return checkboxElement;
+}
+function refreshAllQUestions(label){
+  label.opacity(0.5);
+}
