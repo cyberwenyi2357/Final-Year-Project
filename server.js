@@ -16,11 +16,17 @@ app.get("/token", async (_req, res) => {
 
 app.post("/get_summary", async (_req, res) => {
   const text2Summarize = _req.body.input_text;
-  const prompt = "Please give me one or two keywords of the transcript."
-  const response = await aai.lemur.task({
-    prompt: prompt,
-    input_text : text2Summarize
-  })
+  const prompt = "Please conclude the key points of the transcript provided, and tell me the number of key points."
+
+  let response = "";
+  if (text2Summarize !== undefined && text2Summarize.trim() !== "") {
+    response = await aai.lemur.task({
+      prompt: prompt,
+      input_text : text2Summarize
+    });
+    console.log("Backend, res", response);
+  }
+
   res.json({ response: response });
 });
 

@@ -3,30 +3,28 @@ const startInterviewButton = document.getElementById("startInterviewButton");
 const addTopicButton = document.getElementById("addTopicButton");
 const addQuestionButton = document.getElementById("addQuestionButton")
 const messageBox = document.getElementById("message-box");
-
 // set initial state of application variables
 // messageEl.style.display = "none";
 let isRecording = false;
 let rt;
 let microphone;
-// This is the most important status to maintain.
-const mySegments = []; // seg {id, shapes: {circleElement, textElement}, fullMessage}
-let segCount = 0;
+
+
 var width = window.innerWidth;
 var height = window.innerHeight;
 let isTheFirstTimeToSpeak = true;
-var stage = new Konva.Stage({
+
+const stage = new Konva.Stage({
   container: 'my-canvas',
   width: width,
   height: height,
 });
-
+let instantText;
 var layer = new Konva.Layer();
 stage.add(layer);
 let spaceBetweenQuestions=45;
-// Create a new directed graph
 
-var g=new graphlib.Graph();
+// Create a new directed graph
 function createMicrophone() {
   let stream;
   let audioContext;
@@ -79,6 +77,7 @@ function createMicrophone() {
     }
   }
 }
+
 function mergeBuffers(lhs, rhs) {
   const mergedBuffer = new Int16Array(lhs.length + rhs.length)
   mergedBuffer.set(lhs, 0)
@@ -86,9 +85,8 @@ function mergeBuffers(lhs, rhs) {
   return mergedBuffer
 }
 
-const delta = 10;
 const initializeBubbleForSegment = (x,y) => {
-  var originalAttrs = {
+  const originalAttrs = {
     x: x,
     y: y,
     scaleX: 1,
@@ -96,53 +94,53 @@ const initializeBubbleForSegment = (x,y) => {
     draggable: true,
     rotation: 0,
   };
-  var group = new Konva.Group(originalAttrs);
-  layer.add(group);
-  let size=100;
-  let circle=new Konva.Circle({
+  const bubbleGroup = new Konva.Group(originalAttrs);
+  layer.add(bubbleGroup);
+
+  const size=100;
+  const circle=new Konva.Circle({
     x: 0,
     y: 0,
     radius: size/2,
     fill: 'red',
   });
-  group.add(circle);
-  var defaultText = ' ';
-  var text = new Konva.Text({
-    text: defaultText,
-    x: size/1.8,
-    y: size/1.2,
-    width: size,
-    // y:size/1.2,
-    // align: 'right',
-  });
-  group.add(text);
-  var hammertime = new Hammer(group, { domEvents: true });
+  bubbleGroup.add(circle);
 
+  const defaultText = ' ';
+  const text = new Konva.Text({
+    text: defaultText,
+    x: -size/3.5,
+    y: -size/5,
+    width: size,
+  });
+  bubbleGroup.add(text);
+
+  let hammertime = new Hammer(bubbleGroup, { domEvents: true });
   // add rotate gesture
   hammertime.get('rotate').set({ enable: true });
 
   // now attach all possible events
-  group.on('swipe', function (ev) {
+  bubbleGroup.on('swipe', function (ev) {
     text.text('swiping');
-    group.to({
-      x: group.x() + ev.evt.gesture.deltaX,
-      y: group.y() + ev.evt.gesture.deltaY,
+    bubbleGroup.to({
+      x: bubbleGroup.x() + ev.evt.gesture.deltaX,
+      y: bubbleGroup.y() + ev.evt.gesture.deltaY,
 
       onFinish: function () {
-        group.to(Object.assign({}, originalAttrs));
+        bubbleGroup.to(Object.assign({}, originalAttrs));
         text.text(defaultText);
       },
     });
   });
 
-  group.on('press', function (ev) {
+  bubbleGroup.on('press', function (ev) {
     text.text('Under press');
     circle.to({
       fill: 'green',
     });
   });
 
-  group.on('touchend', function (ev) {
+  bubbleGroup.on('touchend', function (ev) {
     circle.to({
       fill: 'yellow',
     });
@@ -152,34 +150,35 @@ const initializeBubbleForSegment = (x,y) => {
     }, 300);
   });
 
-  group.on('dragend', () => {
-    group.to(Object.assign({}, originalAttrs));
+  bubbleGroup.on('dragend', () => {
+    bubbleGroup.to(Object.assign({}, originalAttrs));
   });
 
   var oldRotation = 0;
   var startScale = 0;
-  group.on('rotatestart', function (ev) {
+  bubbleGroup.on('rotatestart', function (ev) {
     oldRotation = ev.evt.gesture.rotation;
     startScale = circle.scaleX();
-    group.stopDrag();
-    group.draggable(false);
+    bubbleGroup.stopDrag();
+    bubbleGroup.draggable(false);
     text.text('rotating...');
   });
 
-  group.on('rotate', function (ev) {
+  bubbleGroup.on('rotate', function (ev) {
     var delta = oldRotation - ev.evt.gesture.rotation;
-    group.rotate(-delta);
+    bubbleGroup.rotate(-delta);
     oldRotation = ev.evt.gesture.rotation;
-    group.scaleX(startScale * ev.evt.gesture.scale);
-    group.scaleY(startScale * ev.evt.gesture.scale);
+    bubbleGroup.scaleX(startScale * ev.evt.gesture.scale);
+    bubbleGroup.scaleY(startScale * ev.evt.gesture.scale);
   });
 
-  group.on('rotateend rotatecancel', function (ev) {
-    group.to(Object.assign({}, originalAttrs));
+  bubbleGroup.on('rotateend rotatecancel', function (ev) {
+    bubbleGroup.to(Object.assign({}, originalAttrs));
     text.text(defaultText);
-    group.draggable(true);
+    bubbleGroup.draggable(true);
   });
-  return{group}
+
+  return[bubbleGroup,text];
 }
 
 
@@ -196,7 +195,7 @@ const run = async () => {
       microphone = null;
     }
     // console.log("To summary", mySegments[segCount-1].fullMessage);
-    // const sumResult = await callSummary(mySegments[segCount-1].fullMessage);
+
     // messageBox.innerText = sumResult;
   }
   else
@@ -226,17 +225,10 @@ const run = async () => {
         if (texts[key]) {
           msg += ` ${texts[key]}`;
         }
-        let instantText;
         instantText=` ${texts[key]}`;
-      }
-messageBox.innerText=msg;
-        // const newSeg = {
-        //   id: `seg_${segCount}`,
-        //   shapes: shapes
-        // };
-        // mySegments.push(newSeg);
-        // segCount++;
 
+      }
+      messageBox.innerText=msg;
     });
 
     rt.on("error", async (error) => {
@@ -256,33 +248,93 @@ messageBox.innerText=msg;
       rt.sendAudio(audioData);
     });
   }
-
   isRecording = !isRecording;
-
   startInterviewButton.innerText = isRecording ? "Stop" : "Start interview";
 };
 
 startInterviewButton.addEventListener("click", () => {
-  // 1
-  // updatePositionAll();
-for (let label of labelCollection){
-  checkBoxCollection.push(addCheckBox(label));
-  refreshAllQUestions(label);
-}
-  // 2
+  for (let q of questionCollection) {
+    const label = q.label;
+
+    let checkboxElement = document.createElement("input");
+    checkboxElement.type = "checkbox";
+    checkboxElement.style.width = "18px";
+    checkboxElement.style.height = "18px";
+    checkboxElement.style.zIndex = "9999";
+    // 设置元素的 CSS 样式
+    checkboxElement.style.position = "absolute";
+    checkboxElement.style.top = label.y()+label.getText().height()*1.4+'px';
+    checkboxElement.style.left = label.x()+label.getText().width()*0.8+'px';
+    document.body.appendChild(checkboxElement);
+
+    const updateCheckboxPosition = () => {
+      checkboxElement.style.top = label.y() + label.getText().height() * 3 + "px";
+      checkboxElement.style.left = label.x() + label.getText().width() * 0.9 + 'px';
+      // 调用下一次更新
+      requestAnimationFrame(updateCheckboxPosition);
+    };
+    // 调用更新函数开始实时更新位置
+    updateCheckboxPosition();
+
+    const onClickCheckbox = (event) => {
+      // 在复选框被点击时执行的逻辑
+
+      // summarize previous focused question
+      if (focusedQuestion) {
+        summaryForQuestion(focusedQuestion);
+      }
+
+      // then, focus onto next question
+      focusedQuestion = q;
+
+      // console.log("Label?", label);
+      label.opacity(1);
+
+      let [bubble, textOfBubble]= initializeBubbleForSegment(label.x()+40, label.y()+95);
+
+      // console.log("Question?", q);
+      q.bubble.push(bubble);
+      q.bubbleTexts.push(textOfBubble);
+    };
+
+    checkboxElement.addEventListener("click", onClickCheckbox);
+
+    q.checkBox = checkboxElement;
+    label.opacity(0.5);
+  }
+
+  setInterval(function() {
+    if (focusedQuestion && focusedQuestion.bubbleTexts[0]) {
+      const bubble2BeUpdated = focusedQuestion.bubbleTexts[0];
+      if (instantText !== undefined) {
+        bubble2BeUpdated.text(instantText);
+        focusedQuestion.segment += instantText;
+      }
+    }
+  },1000);
+
   run();
 });
+
 addQuestionButton.addEventListener("click",addQuestion);
-let labelCollection=[];
-let checkBoxCollection=[];
-// initializeBubbleForSegment();
+
+
+
+
+// {
+//   label: undefined,
+//   checkbox: undefined,
+//   bubble: [],
+//   status: "init" // "recording", "completed"
+// }
+let questionCollection = [];
+let focusedQuestion = undefined;
+
 
 function addQuestion(){
-  let newAttribute;
-  let QA= new Konva.Group(newAttribute);
   var label = new Konva.Label({
     x: 50,
-    y: 40+labelCollection.length * spaceBetweenQuestions,
+    y: 40 + questionCollection.length * spaceBetweenQuestions,
     opacity: 1,
     draggable: true,
   });
@@ -311,17 +363,14 @@ function addQuestion(){
       scaleX: 2,
     });
   });
-
   textNode.on('dblclick dbltap', () => {
     // hide text node and transformer:
     textNode.hide();
     // create textarea over canvas with absolute position
     // first we need to find position for textarea
     // how to find it?
-
     // at first lets find position of text node relative to the stage:
     var textPosition = textNode.absolutePosition();
-
     // so position of textarea will be the sum of positions above:
     var areaPosition = {
       x: stage.container().offsetLeft + textPosition.x,
@@ -331,7 +380,6 @@ function addQuestion(){
     // create textarea and style it
     var textarea = document.createElement('textarea');
     document.body.appendChild(textarea);
-
     // apply many styles to match text on canvas as close as possible
     // remember that text rendering on canvas and on the textarea can be different
     // and sometimes it is hard to make it 100% the same. But we will try...
@@ -339,7 +387,6 @@ function addQuestion(){
     textarea.style.position = 'absolute';
     textarea.style.top = areaPosition.y + 'px';
     textarea.style.left = areaPosition.x + 'px';
-
     textarea.style.width = textNode.width() - textNode.padding() * 2 + 'px';
     textarea.style.height =
         textNode.height() - textNode.padding() * 2 + 5 + 'px';
@@ -358,7 +405,6 @@ function addQuestion(){
     textarea.style.textAlign = textNode.align();
     textarea.style.color = textNode.fill();
     var transform = '';
-
     var px = 0;
     // also we need to slightly move textarea on firefox
     // because it jumps a bit
@@ -368,23 +414,17 @@ function addQuestion(){
       px += 2 + Math.round(textNode.fontSize() / 20);
     }
     transform += 'translateY(-' + px + 'px)';
-
     textarea.style.transform = transform;
-
     // reset height
     textarea.style.height = 'auto';
     // after browsers resized it we can set actual value
     textarea.style.height = textarea.scrollHeight + 3 + 'px';
-
     textarea.focus();
-
 // 创建 <input> 元素
-
     function removeTextarea() {
       textarea.parentNode.removeChild(textarea);
       window.removeEventListener('click', handleOutsideClick);
       textNode.show();
-
     }
 
     function setTextareaWidth(newWidth) {
@@ -401,7 +441,6 @@ function addQuestion(){
       if (isSafari || isFirefox) {
         newWidth = Math.ceil(newWidth);
       }
-
       var isEdge =
           document.documentMode || /Edge/.test(navigator.userAgent);
       if (isEdge) {
@@ -430,7 +469,6 @@ function addQuestion(){
       textarea.style.height =
           textarea.scrollHeight + textNode.fontSize() + 'px';
     });
-
     function handleOutsideClick(e) {
       if (e.target !== textarea) {
         textNode.text(textarea.value);
@@ -441,44 +479,20 @@ function addQuestion(){
       window.addEventListener('click', handleOutsideClick);
     });
   });
-  labelCollection.push(label);
+
+  questionCollection.push({
+    label: label,
+    bubble: [],
+    bubbleTexts: [],
+    status: "init",
+    segment: "",
+  });
 }
 
-function addCheckBox(label){
-  let checkboxElement = document.createElement("input");
-// 设置元素类型为复选框
-  checkboxElement.type = "checkbox";
-// 设置元素的 CSS 样式
-  checkboxElement.style.position = "absolute";
-  checkboxElement.style.top = label.y()+label.getText().height()*1.4+'px';
-  checkboxElement.style.left = label.x()+label.getText().width()*0.8+'px';
-  // console.log(checkboxElement.style.top);
-  checkboxElement.style.width = "18px";
-  checkboxElement.style.height = "18px";
-  checkboxElement.style.zIndex = "9999";
-// 将元素添加到文档中的适当位置
-  document.body.appendChild(checkboxElement);
-  function updateCheckboxPosition() {
-    checkboxElement.style.top =  label.y()+label.getText().height()*3+ "px";
-    checkboxElement.style.left = label.x()+label.getText().width()*0.9+'px';
-    // 调用下一次更新
-    requestAnimationFrame(updateCheckboxPosition);
-  }
-// 调用更新函数开始实时更新位置
-  updateCheckboxPosition();
-  checkboxElement.addEventListener("click", function(event) {
-    // 在复选框被点击时执行的逻辑
-    if (checkboxElement.checked) {
-label.opacity(1);
-      // if(isRecording)
-      initializeBubbleForSegment(label.x(), label.y()+30);
-      // run();
-    } else {
-      console.log("复选框未被选中");
-    }
+function summaryForQuestion(q) {
+  callSummary(q.segment).then(summary => {
+    console.log("Summary:", summary)
+    q.bubbleTexts[0].text(summary);
   });
-  return checkboxElement;
 }
-function refreshAllQUestions(label){
-  label.opacity(0.5);
-}
+

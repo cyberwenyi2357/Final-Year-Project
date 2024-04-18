@@ -14,7 +14,8 @@ const callSummary = async (textToSummary) => {
         const jsonResult = await summaryRes.json();
         console.log("Raw json result:", jsonResult.response);
         let summaryText = jsonResult.response.response;
-        return summaryText.replace(/<\/?text>/g, '');
+        return summaryText;
+        // return summaryText.replace(/<\/?text>/g, '');
     } else {
         console.error(`Get summary error: ${summaryRes.status}`);
         return "";
