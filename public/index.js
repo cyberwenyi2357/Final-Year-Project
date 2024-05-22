@@ -85,27 +85,6 @@ function mergeBuffers(lhs, rhs) {
   return mergedBuffer
 }
 
-const initializeBubbleForSegment = (x,y) => {
-  const originalAttrs = {
-    x: x,
-    y: y,
-    scaleX: 1,
-    scaleY: 1,
-    draggable: true,
-    rotation: 0,
-  };
-  const bubbleGroup = new Konva.Group(originalAttrs);
-  layer.add(bubbleGroup);
-
-  const size=100;
-  const circle=new Konva.Circle({
-    x: 0,
-    y: 0,
-    radius: size/2,
-    fill: 'red',
-  });
-  bubbleGroup.add(circle);
-
   const defaultText = ' ';
   const text = new Konva.Text({
     text: defaultText,
