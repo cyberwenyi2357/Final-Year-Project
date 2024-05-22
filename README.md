@@ -1,4 +1,4 @@
-# A tool for providing real-time assistance with semi-structured interview
+# IntelePrompter - A tool for providing real-time assistance with semi-structured interview
 
 ## How To Install and Run the Project
 
